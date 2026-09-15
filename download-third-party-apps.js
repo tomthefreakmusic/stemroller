@@ -127,7 +127,7 @@ async function main() {
   if (process.platform === 'win32') {
     downloads.push(
       [
-        'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
+        'https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-essentials_build.zip',
         path.join(
           `${winOrMac}-extra-files`,
           'ThirdPartyApps',

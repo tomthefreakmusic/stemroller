@@ -1,3 +1,10 @@
+import { separateRoformer } from './roformer.js'
+import {
+  getRoformerModel,
+  isSupportedModel,
+  validateRoformerOptions,
+  createRoformerProgressParser,
+} from './roformerModels.js'
 import os from 'os'
 import fs from 'fs/promises'
 import path from 'path'
@@ -12,9 +19,10 @@ let ytCacheDir = null
 let curItems = [],
   curChildProcess = null
 let curProgressFtStemIdx = null
+let activeJob = null
 
 function getPathToThirdPartyApps() {
-  if (process.env.NODE_ENV === 'dev') {
+  if (process.env.NODE_ENV === 'dev' || process.env.STEMROLLER_RUN_FROM_SOURCE) {
     if (process.platform === 'win32') {
       return path.resolve(path.join(import.meta.dirname, '..', 'win-extra-files', 'ThirdPartyApps'))
     } else if (process.platform === 'darwin') {
@@ -32,7 +40,7 @@ function getPathToThirdPartyApps() {
 }
 
 function getPathToModels() {
-  if (process.env.NODE_ENV === 'dev') {
+  if (process.env.NODE_ENV === 'dev' || process.env.STEMROLLER_RUN_FROM_SOURCE) {
     if (process.platform === 'win32' || process.platform === 'darwin') {
       return path.resolve(path.join(import.meta.dirname, '..', 'anyos-extra-files', 'Models'))
     } else {
@@ -58,9 +66,7 @@ const PATH_TO_FFMPEG = PATH_TO_THIRD_PARTY_APPS
 const PATH_TO_YT_DLP = PATH_TO_THIRD_PARTY_APPS
   ? path.join(PATH_TO_THIRD_PARTY_APPS, 'yt-dlp')
   : null
-const PATH_TO_DENO = PATH_TO_THIRD_PARTY_APPS
-  ? path.join(PATH_TO_THIRD_PARTY_APPS, 'deno')
-  : null
+const PATH_TO_DENO = PATH_TO_THIRD_PARTY_APPS ? path.join(PATH_TO_THIRD_PARTY_APPS, 'deno') : null
 const DEMUCS_EXE_NAME = PATH_TO_THIRD_PARTY_APPS ? 'demucs-cxfreeze' : 'demucs'
 const FFMPEG_EXE_NAME = 'ffmpeg'
 const YT_DLP_EXE_NAME = 'yt-dlp'
@@ -134,40 +140,40 @@ function updateDemucsProgress(videoId, data) {
   }
 }
 
-function spawnAndWait(videoId, cwd, command, args, isDemucs) {
+function spawnAndWait(videoId, cwd, command, args, isDemucs, options = {}) {
   return new Promise((resolve, reject) => {
-    killCurChildProcess()
-
-    CHILD_PROCESS_ENV.LANG = `${(app.getSystemLocale() || 'en-US').replace('-', '_')}.UTF-8` // Set here instead of when CHILD_PROCESS_ENV defined, because app must be ready before we can read the system locale
-    curChildProcess = childProcess.spawn(command, args, {
+    if (activeJob?.cancelled) return reject(new Error('Task cancelled'))
+    CHILD_PROCESS_ENV.LANG = `${(app.getSystemLocale() || 'en-US').replace('-', '_')}.UTF-8`
+    const child = childProcess.spawn(command, args, {
       cwd,
-      env: CHILD_PROCESS_ENV,
+      env: { ...CHILD_PROCESS_ENV, ...options.env },
+      windowsHide: true,
     })
-
-    curChildProcess.stdout.on('data', (data) => {
-      console.log(`child stdout:\n${data}`)
+    curChildProcess = child
+    let errorTail = ''
+    const reportProgress = createRoformerProgressParser((progress) =>
+      updateProgressRaw(videoId, progress * 0.95)
+    )
+    child.stdout.on('data', (data) => {
+      console.log(`child stdout: ${data}`)
+      if (options.roformer) reportProgress(data)
     })
-
-    curChildProcess.stderr.on('data', (data) => {
-      console.log(`child stderr:\n${data}`)
-      if (isDemucs) {
-        // For some reason the progress displays in stderr instead of stdout
-        updateDemucsProgress(videoId, data)
-      }
+    child.stderr.on('data', (data) => {
+      console.log(`child stderr: ${data}`)
+      errorTail = (errorTail + data.toString()).slice(-2000)
+      if (isDemucs) updateDemucsProgress(videoId, data)
     })
-
-    curChildProcess.on('error', (error) => {
+    child.on('error', (error) => {
       reject(error)
-      killCurChildProcess()
+      if (curChildProcess === child) curChildProcess = null
     })
-
-    curChildProcess.on('exit', (code, signal) => {
-      if (signal !== null) {
-        reject(new Error(`Child process exited due to signal: ${signal}`))
-      } else {
-        resolve(code)
-      }
-      curChildProcess = null
+    child.on('close', (code, signal) => {
+      if (activeJob?.cancelled) reject(new Error('Task cancelled'))
+      else if (signal !== null) reject(new Error(`Child process exited due to signal: ${signal}`))
+      else if (code !== 0)
+        reject(new Error(`${path.basename(command)} exited with code ${code}. ${errorTail}`))
+      else resolve(code)
+      if (curChildProcess === child) curChildProcess = null
     })
   })
 }
@@ -288,6 +294,9 @@ function getFfmpegCompressionArguments(filetype) {
 
 async function _processVideo(video, tmpDir) {
   const demucsModelName = getModelName()
+  const roformerModel = getRoformerModel(demucsModelName)
+  const roformerOptions = getRoformerOptions()
+  const backend = getPyTorchBackend()
   const demucsStemsFiletype = getOutputFormat()
   const compressionArgs = getFfmpegCompressionArguments(demucsStemsFiletype)
   const needsPrefix = getPrefixStemFilenameWithSongName()
@@ -325,34 +334,63 @@ async function _processVideo(video, tmpDir) {
     },
     null
   )
-  const jobCount = getJobCount()
-  console.log(
-    `Splitting video "${video.videoId}"; ${jobCount} jobs using model "${demucsModelName}"...`
-  )
-  const demucsExeArgs = [mediaPath, '-n', demucsModelName, '-j', jobCount]
-  if (getPyTorchBackend() === 'cpu') {
-    console.log('Running with "-d cpu" to force CPU instead of CUDA')
-    demucsExeArgs.push('-d', 'cpu')
-  } else if (process.platform === 'darwin') {
-    // Maybe need to apply https://github.com/facebookresearch/demucs/pull/575/files instead, in case MPS is not available on Intel Macs ??
-    console.log('Running with "-d mps" to force MPS instead of CPU/CUDA')
-    demucsExeArgs.push('-d', 'mps')
-  }
-
-  if (PATH_TO_MODELS) {
-    demucsExeArgs.push('--repo', PATH_TO_MODELS)
-  }
-  if (demucsModelName.indexOf('_ft') >= 0) {
-    curProgressFtStemIdx = 0
+  let demucsWavFilesList
+  if (roformerModel) {
+    demucsWavFilesList = await separateRoformer({
+      model: roformerModel,
+      modelDir:
+        process.env.STEMROLLER_MODELS_DIR ||
+        PATH_TO_MODELS ||
+        path.join(app.getPath('userData'), 'Models'),
+      executable:
+        process.env.STEMROLLER_ROFORMER_EXE ||
+        (PATH_TO_THIRD_PARTY_APPS
+          ? path.join(
+              PATH_TO_THIRD_PARTY_APPS,
+              'bs-roformer',
+              backend === 'cpu' ? 'cpu' : 'vulkan',
+              process.platform === 'win32' ? 'bs_roformer-cli.exe' : 'bs_roformer-cli'
+            )
+          : 'bs_roformer-cli'),
+      mediaPath,
+      tmpDir,
+      options: roformerOptions,
+      backend,
+      run: (command, args, options) =>
+        spawnAndWait(video.videoId, tmpDir, command, args, false, options),
+    })
   } else {
-    curProgressFtStemIdx = null
-  }
-  await spawnAndWait(video.videoId, tmpDir, DEMUCS_EXE_NAME, demucsExeArgs, true)
-  curProgressFtStemIdx = null
-  updateProgressRaw(video.videoId, 0.95)
+    const jobCount = getJobCount()
+    console.log(
+      `Splitting video "${video.videoId}"; ${jobCount} jobs using model "${demucsModelName}"...`
+    )
+    const demucsExeArgs = [mediaPath, '-n', demucsModelName, '-j', jobCount]
+    if (backend === 'cpu') {
+      console.log('Running with "-d cpu" to force CPU instead of CUDA')
+      demucsExeArgs.push('-d', 'cpu')
+    } else if (process.platform === 'darwin') {
+      // Maybe need to apply https://github.com/facebookresearch/demucs/pull/575/files instead, in case MPS is not available on Intel Macs ??
+      console.log('Running with "-d mps" to force MPS instead of CPU/CUDA')
+      demucsExeArgs.push('-d', 'mps')
+    }
 
-  const demucsBasePath = await findDemucsOutputDir(path.join(tmpDir, 'separated', demucsModelName))
-  const demucsWavFilesList = await listDemucsOutputFiles(demucsBasePath)
+    if (PATH_TO_MODELS) {
+      demucsExeArgs.push('--repo', PATH_TO_MODELS)
+    }
+    if (demucsModelName.indexOf('_ft') >= 0) {
+      curProgressFtStemIdx = 0
+    } else {
+      curProgressFtStemIdx = null
+    }
+    await spawnAndWait(video.videoId, tmpDir, DEMUCS_EXE_NAME, demucsExeArgs, true)
+    curProgressFtStemIdx = null
+    updateProgressRaw(video.videoId, 0.95)
+
+    const demucsBasePath = await findDemucsOutputDir(
+      path.join(tmpDir, 'separated', demucsModelName)
+    )
+    demucsWavFilesList = await listDemucsOutputFiles(demucsBasePath)
+  }
   if (demucsWavFilesList.length === 0) {
     throw new Error('No .wav output stems written - Demucs probably failed')
   }
@@ -368,35 +406,42 @@ async function _processVideo(video, tmpDir) {
         })
   updateProgressRaw(video.videoId, 0.97)
 
-  const instrumentalPath = path.join(tmpDir, `instrumental.${demucsStemsFiletype}`)
-  console.log(`Mixing down instrumental stems to "${instrumentalPath}"`)
-  const ffmpegInstrumentalSourceFiles = []
-  for (const filename of demucsWavFilesList) {
-    const baseName = path.parse(filename).name
-    if (baseName === 'vocals') {
-      continue
-    }
-    ffmpegInstrumentalSourceFiles.push('-i')
-    ffmpegInstrumentalSourceFiles.push(filename)
-  }
-  await spawnAndWait(
-    video.videoId,
-    tmpDir,
-    FFMPEG_EXE_NAME,
-    [
-      ...ffmpegInstrumentalSourceFiles,
-      ...compressionArgs,
-      '-filter_complex',
-      `amix=inputs=${ffmpegInstrumentalSourceFiles.length / 2}:normalize=0`,
-      instrumentalPath,
-    ],
-    false
-  )
-  const instrumentalSuccess = await ensureFileExists(instrumentalPath)
-  if (!instrumentalSuccess) {
-    throw new Error(
-      `Unable to access instrumental file "${instrumentalPath}" - ffmpeg probably failed`
+  let instrumentalPath
+  if (roformerModel) {
+    instrumentalPath = demucsConvertedFilesList.find(
+      (file) => path.parse(file).name === 'instrumental'
     )
+  } else {
+    instrumentalPath = path.join(tmpDir, `instrumental.${demucsStemsFiletype}`)
+    console.log(`Mixing down instrumental stems to "${instrumentalPath}"`)
+    const ffmpegInstrumentalSourceFiles = []
+    for (const filename of demucsWavFilesList) {
+      const baseName = path.parse(filename).name
+      if (baseName === 'vocals') {
+        continue
+      }
+      ffmpegInstrumentalSourceFiles.push('-i')
+      ffmpegInstrumentalSourceFiles.push(filename)
+    }
+    await spawnAndWait(
+      video.videoId,
+      tmpDir,
+      FFMPEG_EXE_NAME,
+      [
+        ...ffmpegInstrumentalSourceFiles,
+        ...compressionArgs,
+        '-filter_complex',
+        `amix=inputs=${ffmpegInstrumentalSourceFiles.length / 2}:normalize=0`,
+        instrumentalPath,
+      ],
+      false
+    )
+    const instrumentalSuccess = await ensureFileExists(instrumentalPath)
+    if (!instrumentalSuccess) {
+      throw new Error(
+        `Unable to access instrumental file "${instrumentalPath}" - ffmpeg probably failed`
+      )
+    }
   }
   updateProgressRaw(video.videoId, 0.98)
 
@@ -423,10 +468,16 @@ async function _processVideo(video, tmpDir) {
     video.mediaSource === 'local' && getLocalFileOutputToContainingDir()
       ? path.dirname(mediaPath)
       : getOutputPath()
-  const outputBasePath = path.join(outputBasePathContainingFolder, outputFolderName)
+  if (activeJob?.cancelled) throw new Error('Task cancelled')
+  // Separate model comparisons so two-stem results never inherit old Demucs stem files.
+  const outputBasePath = path.join(
+    outputBasePathContainingFolder,
+    roformerModel ? `${outputFolderName} - ${demucsModelName}` : outputFolderName
+  )
   await fs.mkdir(outputBasePath, { recursive: true })
   console.log(`Copying all stems to "${outputBasePath}"`)
   for (const filename of demucsConvertedFilesList) {
+    if (activeJob?.cancelled) throw new Error('Task cancelled')
     const baseName = path.parse(filename).name
     const outputPath = path.join(
       outputBasePath,
@@ -451,6 +502,7 @@ async function _processVideo(video, tmpDir) {
       elapsedSeconds
     )} seconds`
   )
+  if (activeJob?.cancelled) throw new Error('Task cancelled')
   setVideoStatusAndPath(video.videoId, { step: 'done' }, outputBasePath)
 }
 
@@ -465,32 +517,35 @@ async function processVideo(video) {
     console.trace(err)
   }
 
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), TMP_PREFIX))
+  let tmpDir = null
   try {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), TMP_PREFIX))
     await _processVideo(video, tmpDir)
   } catch (err) {
     console.trace(err)
 
     const status = getVideoStatus(video.videoId)
-    if (status === null) {
+    if (status === null || activeJob?.cancelled) {
       console.log('Task was canceled by user.')
     } else {
-      setVideoStatusAndPath(video.videoId, { step: 'error' }, null)
+      setVideoStatusAndPath(video.videoId, { step: 'error', message: err.message }, null)
     }
   } finally {
     curProgressFtStemIdx = null
 
     try {
-      await fs.rm(tmpDir, {
-        recursive: true,
-        maxRetries: 5,
-        retryDelay: 1000,
-      })
+      if (tmpDir)
+        await fs.rm(tmpDir, {
+          recursive: true,
+          maxRetries: 5,
+          retryDelay: 1000,
+        })
     } catch (err) {
       console.trace(err)
     }
 
     // Will filter out the current (completed) video
+    activeJob = null
     setItems(curItems)
 
     if (powerSaveBlockId !== null) {
@@ -516,17 +571,17 @@ export const setItems = async (items) => {
     return status.step !== 'done' && status.step !== 'error'
   })
 
-  const oldVideoId = curItems.length > 0 ? curItems[0].videoId : null
   const newVideoId = items.length > 0 ? items[0].videoId : null
-  const interrupt = oldVideoId !== newVideoId
-
   curItems = items
-  if (interrupt) {
+  if (activeJob && activeJob.videoId !== newVideoId) {
+    activeJob.cancelled = true
     killCurChildProcess()
-    if (curItems.length > 0) {
-      // Avoid recursion when processVideo calls this function
-      setTimeout(() => processVideo(curItems[0]), 0)
-    }
+  }
+  // Wait for cancellation and temporary-file cleanup before starting another job.
+  if (!activeJob && curItems.length > 0) {
+    const video = curItems[0]
+    activeJob = { videoId: video.videoId, cancelled: false }
+    setTimeout(() => processVideo(video), 0)
   }
 }
 
@@ -589,7 +644,7 @@ function setVideoStatusAndPath(videoId, status, path) {
 
 export const setElectronStore = (store) => {
   electronStore = store
-  loadVideosDb()
+  return loadVideosDb()
 }
 
 export const getOutputPath = () => {
@@ -629,6 +684,7 @@ export const setOutputPath = (outputPath) => {
 }
 
 export const setModelName = (name) => {
+  if (!isSupportedModel(name)) throw new Error('Unsupported separation model')
   electronStore.set('modelName', name)
 }
 
@@ -709,7 +765,7 @@ export const isBusy = () => {
   return (
     curItems.filter((video) => {
       const status = getVideoStatus(video.videoId)
-      return status.step === 'processing' || status.step === 'downloading'
+      return status?.step === 'processing' || status?.step === 'downloading'
     }).length > 0
   )
 }
@@ -740,4 +796,13 @@ export const deleteTmpFolders = async () => {
       }
     }
   }
+}
+
+export const getRoformerOptions = () =>
+  validateRoformerOptions(
+    electronStore?.get('roformerOptions') || { chunkSize: 352800, overlap: 2 }
+  )
+
+export const setRoformerOptions = (options) => {
+  electronStore.set('roformerOptions', validateRoformerOptions(options))
 }

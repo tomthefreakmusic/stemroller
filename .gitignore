@@ -20,3 +20,5 @@ node_modules
 !*-extra-files/ThirdPartyApps/deno/.gitkeep
 *-extra-files/Models/**
 !*-extra-files/Models/.gitkeep
+
+*-extra-files/ThirdPartyApps/bs-roformer/**

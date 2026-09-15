@@ -112,7 +112,7 @@ async function handleOpenDonate() {
 }
 
 async function handleOpenSource() {
-  await shell.openExternal('https://www.stemroller.com/source')
+  await shell.openExternal('https://github.com/tomthefreakmusic/stemroller')
 }
 
 async function handleOpenChat() {
@@ -217,7 +217,7 @@ function createWindow() {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
-    checkForUpdates()
+    // Upstream releases do not contain this fork's RoFormer support.
   })
 
   mainWindow.on('close', (event) => {
@@ -333,7 +333,7 @@ async function main() {
     }
 
     electronStore = new Store()
-    processQueue.setElectronStore(electronStore)
+    await processQueue.setElectronStore(electronStore)
 
     createWindow()
 
@@ -350,6 +350,10 @@ async function main() {
     ipcMain.handle('disableDonatePopup', handleDisableDonatePopup)
     ipcMain.handle('getOutputPath', handleGetOutputPath)
     ipcMain.handle('getModelName', handleGetModelName)
+    ipcMain.handle('getRoformerOptions', () => processQueue.getRoformerOptions())
+    ipcMain.handle('setRoformerOptions', (event, options) =>
+      processQueue.setRoformerOptions(options)
+    )
     ipcMain.handle('getLocalFileOutputToContainingDir', handleGetLocalFileOutputToContainingDir)
     ipcMain.handle('getPrefixStemFilenameWithSongName', handleGetPrefixStemFilenameWithSongName)
     ipcMain.handle('getPreserveOriginalAudio', handleGetPreserveOriginalAudio)

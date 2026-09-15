@@ -7,7 +7,7 @@
   "homepage": "https://stemroller.com",
   "license": "Unlicense",
   "author": "StemRoller Developers",
-  "repository": "https://github.com/stemrollerapp/stemroller.git",
+  "repository": "https://github.com/tomthefreakmusic/stemroller.git",
   "main": "main-src/main.js",
   "scripts": {
     "download-third-party-apps": "node download-third-party-apps.js",
@@ -23,7 +23,9 @@
     "start": "cross-env NODE_ENV=production STEMROLLER_RUN_FROM_SOURCE=true npm run start:all",
     "start:all": "concurrently -k -n=svelte,electron -c='#ff3e00',blue \"npm run start:svelte\" \"npm run start:electron\"",
     "start:svelte": "vite preview",
-    "start:electron": "electron ."
+    "start:electron": "electron .",
+    "setup:roformer": "node scripts/setup-roformer.js",
+    "test": "node --test tests/*.test.js"
   },
   "devDependencies": {
     "@electron/packager": "^18.3.6",

@@ -2,8 +2,8 @@
   "directories": {
     "buildResources": "electron-build-resources"
   },
-  "appId": "com.stemroller.stemroller",
-  "productName": "StemRoller",
+  "appId": "com.tomthefreakmusic.stemroller-roformer",
+  "productName": "StemRoller RoFormer",
   "files": [
     {
       "from": "build",
@@ -16,10 +16,21 @@
     {
       "from": "anyos-extra-files/Models",
       "to": "Models"
+    },
+    {
+      "from": "docs",
+      "to": "Documentation"
     }
   ],
   "mac": {
-    "target": [{ "target": "dir", "arch": ["x64"] }],
+    "target": [
+      {
+        "target": "dir",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
     "category": "public.app-category.music",
     "extraFiles": [
       {
@@ -33,7 +44,12 @@
     "extraFiles": [
       {
         "from": "win-extra-files/ThirdPartyApps",
-        "to": "ThirdPartyApps"
+        "to": "ThirdPartyApps",
+        "filter": [
+          "**/*",
+          "!bs-roformer/*.dll",
+          "!bs-roformer/*.exe"
+        ]
       }
     ]
   }

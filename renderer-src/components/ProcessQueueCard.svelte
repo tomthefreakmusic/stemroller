@@ -59,6 +59,7 @@
 {#if status !== null}
   <div
     class="overflow-hidden grow-0 shrink-0 w-60 flex flex-row px-4 p-2 space-x-4 items-center rounded-md text-left bg-slate-800 drop-shadow-md cursor-pointer"
+    title={status.message || video.title}
     disabled={!onClick}
     on:click={onClick}
     on:keydown={(event) => {
@@ -113,7 +114,7 @@
           {#if hovered}
             Retry
           {:else}
-            Failed
+            Failed: {status.message || 'see app log'}
           {/if}
         {:else if status.step === 'done'}
           Open

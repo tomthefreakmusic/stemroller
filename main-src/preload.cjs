@@ -107,3 +107,10 @@ ipcRenderer.on('donateUpdate', (event, message) => {
     donateUpdateHandler(message)
   }
 })
+
+contextBridge.exposeInMainWorld('getRoformerOptions', () =>
+  ipcRenderer.invoke('getRoformerOptions')
+)
+contextBridge.exposeInMainWorld('setRoformerOptions', (options) =>
+  ipcRenderer.invoke('setRoformerOptions', options)
+)

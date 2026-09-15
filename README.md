@@ -1,3 +1,13 @@
+# StemRoller RoFormer fork
+
+Adds BS RoFormer Anvuew Q8, Mel-Band RoFormer Deux Q8, and Gabox FV6 Q8 to StemRoller's model selector, with Vulkan GPU acceleration on Windows. Demucs remains available for individual instruments.
+
+**[Setup, model choices, GPU validation, and licenses](docs/ROFORMER.md)**
+
+After the normal dependency setup below, run `npm run setup:roformer`. Then choose a model under Preferences. Automatic setup covers Windows x64; the model weights are downloaded separately and retain their original licenses.
+
+---
+
 # StemRoller
 
 StemRoller is the first free app which enables you to separate vocal and instrumental stems from any song with a single click! StemRoller uses Facebook's state-of-the-art [Demucs](https://github.com/facebookresearch/demucs) algorithm for demixing songs and integrates search results from YouTube.
@@ -13,7 +23,7 @@ Using StemRoller couldn't be easier - just head to the [StemRoller website](http
 ## Install Dependencies
 
 ```
-git clone https://github.com/stemrollerapp/stemroller.git
+git clone https://github.com/tomthefreakmusic/stemroller.git
 cd stemroller
 npm i -D
 ```
