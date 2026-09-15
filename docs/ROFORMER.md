@@ -72,3 +72,5 @@ The separate CPU-only runtime completed Deux on the same 12-second fixture using
 Cancellation was tested through the real Electron queue: the active native process was cancelled, and the next song completed. The Preferences UI was rendered and model changes were verified through IPC.
 
 If local Windows packaging fails while extracting symbolic links for winCodeSign, use `npm run build:svelte` followed by `npx electron-builder -w --config electron-builder.config.json --config.win.signAndEditExecutable=false`. This produces an unsigned local build without custom executable resource editing.
+
+The final unsigned portable Windows executable was launched and tested through its renderer: Deux produced vocals.wav and instrumental.wav from a local file using the packaged runtime/models. Settings were restored and the app closed afterward. YouTube downloading was bundled but not exercised in the live tests.
