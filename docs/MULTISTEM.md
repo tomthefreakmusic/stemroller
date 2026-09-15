@@ -31,6 +31,7 @@ The portable folder must also contain the updated Electron application. Keep the
 - **8 and 11 seconds** are available. Eleven seconds matches the checkpoints' original inference chunk length. Changing context can change separation quality.
 - **Overlap 4** makes more overlapping predictions and takes additional work. SCNet's supplied config uses overlap 4; PolarFormer's uses overlap 2.
 - Input is converted to stereo 44.1 kHz float WAV. Output length is preserved. WAV retains float audio for individual stems; compressed formats and the combined instrumental use StemRoller's existing export path.
+- Temporary decoded audio and stems are created on the selected output drive and cleaned up after completion, failure, or cancellation. Enable output beside the input only when that drive has sufficient space.
 - Results use model-specific folders. Re-add a completed track to compare another model. Audio accumulation uses system RAM proportional to track length.
 
 Advanced development overrides: `STEMROLLER_MODELS_DIR`, `STEMROLLER_THIRD_PARTY_APPS`, and `STEMROLLER_MULTISTEM_PYTHON` (full interpreter path).
@@ -63,3 +64,5 @@ The fixture is 12 seconds of synthetic stereo audio (529,200 frames). These chec
 The local runtime was assembled from matching installed packages and checked against every pinned requirement, then tested in isolation. The setup script's existing-runtime and verified-download paths were exercised; a clean download/install of the entire PyTorch environment was not repeated locally.
 
 For a practical first audition, try SCNet Large and compare PolarFormer on the same 30–60 seconds. Listen separately to drum transients, bass bleed, and the other stem. There is no measured quality winner on your music yet.
+
+A subsequent full-track check used a 17.5-minute, 96 kHz stereo FLAC with SCNet Large: all four stems and the instrumental exported 46,282,866 finite stereo frames at 44.1 kHz. Processing used the selected output drive for temporary audio, and the temporary directory was removed afterward. This fixes system-drive exhaustion when the output folder is on another drive.

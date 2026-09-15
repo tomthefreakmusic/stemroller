@@ -89,7 +89,7 @@ if (PATH_TO_THIRD_PARTY_APPS) {
     (process.platform === 'win32' ? ';' : ':') +
     PATH_TO_DENO
 }
-const TMP_PREFIX = 'StemRoller-'
+const TMP_PREFIX = '.stemroller-'
 
 function getJobCount() {
   const MAX_NUM_JOBS = 4
@@ -296,7 +296,7 @@ function getFfmpegCompressionArguments(filetype) {
   throw new Error(`Unrecognized filetype: ${filetype}`)
 }
 
-async function _processVideo(video, tmpDir) {
+async function _processVideo(video, tmpDir, outputBasePathContainingFolder) {
   const demucsModelName = getModelName()
   const roformerModel = getRoformerModel(demucsModelName)
   const multistemModel = getMultistemModel(demucsModelName)
@@ -491,10 +491,6 @@ async function _processVideo(video, tmpDir) {
   }
   updateProgressRaw(video.videoId, 0.99)
 
-  const outputBasePathContainingFolder =
-    video.mediaSource === 'local' && getLocalFileOutputToContainingDir()
-      ? path.dirname(mediaPath)
-      : getOutputPath()
   if (activeJob?.cancelled) throw new Error('Task cancelled')
   // Separate model comparisons so two-stem results never inherit old Demucs stem files.
   const outputBasePath = path.join(
@@ -546,8 +542,15 @@ async function processVideo(video) {
 
   let tmpDir = null
   try {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), TMP_PREFIX))
-    await _processVideo(video, tmpDir)
+    // Keep large decoded audio and stems on the selected output drive.
+    // Capture the destination once so changing Preferences cannot move a running job.
+    const outputFolder =
+      video.mediaSource === 'local' && getLocalFileOutputToContainingDir()
+        ? path.dirname(video.localInputPath)
+        : getOutputPath()
+    await fs.mkdir(outputFolder, { recursive: true })
+    tmpDir = await fs.mkdtemp(path.join(outputFolder, TMP_PREFIX))
+    await _processVideo(video, tmpDir, outputFolder)
   } catch (err) {
     console.trace(err)
 
