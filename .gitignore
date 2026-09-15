@@ -22,3 +22,6 @@ node_modules
 !*-extra-files/Models/.gitkeep
 
 *-extra-files/ThirdPartyApps/bs-roformer/**
+
+*-extra-files/ThirdPartyApps/multistem/**
+**/__pycache__/

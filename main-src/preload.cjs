@@ -114,3 +114,6 @@ contextBridge.exposeInMainWorld('getRoformerOptions', () =>
 contextBridge.exposeInMainWorld('setRoformerOptions', (options) =>
   ipcRenderer.invoke('setRoformerOptions', options)
 )
+
+contextBridge.exposeInMainWorld('getMultistemOptions', () => ipcRenderer.invoke('getMultistemOptions'))
+contextBridge.exposeInMainWorld('setMultistemOptions', (options) => ipcRenderer.invoke('setMultistemOptions', options))

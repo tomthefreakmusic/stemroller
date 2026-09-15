@@ -45,9 +45,7 @@ Start by comparing Deux and Anvuew on the same 30–60 seconds of your track. In
 
 Deux is a practical first audition because it predicts both outputs directly; its [model card](https://huggingface.co/becruily/mel-band-roformer-deux) reports vocal/instrumental metrics, but does not establish superiority on your music. Gabox FV6 is another included vocal model to compare.
 
-Outside these GGUF choices, [ZFTurbo's pretrained-model table](https://github.com/ZFTurbo/Music-Source-Separation-Training/blob/main/docs/pretrained_models.md) reports Multisong vocal SDR of 11.00 for BS PolarFormer, 10.98 for KimberleyJensen MelBand RoFormer, and 10.87 for a ViperX BS RoFormer checkpoint. These small differences are checkpoint-specific; they are not measurements of the Anvuew/Deux/Gabox GGUF files. PolarFormer requires a different runtime and is not implemented here.
-
-For four-instrument separation, [SCNet](https://github.com/starrytong/SCNet) is an alternative worth evaluating against Demucs. Neither SCNet nor PolarFormer was tested on this GPU in this change, so their memory fit and speed remain unverified. They cannot be loaded merely by selecting a GGUF filename in this adapter.
+For individual instruments, this fork now includes **SCNet Large** and **BS PolarFormer Aname**, both producing vocals, drums, bass, and other. See [four-stem setup, checkpoints, and GPU validation](MULTISTEM.md). These use an isolated PyTorch/CUDA runtime. Vocal-only leaderboard scores do not establish the quality of the four-stem checkpoints.
 
 ## Model provenance and licenses
 

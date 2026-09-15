@@ -350,6 +350,8 @@ async function main() {
     ipcMain.handle('disableDonatePopup', handleDisableDonatePopup)
     ipcMain.handle('getOutputPath', handleGetOutputPath)
     ipcMain.handle('getModelName', handleGetModelName)
+    ipcMain.handle('getMultistemOptions', () => processQueue.getMultistemOptions())
+    ipcMain.handle('setMultistemOptions', (event, options) => processQueue.setMultistemOptions(options))
     ipcMain.handle('getRoformerOptions', () => processQueue.getRoformerOptions())
     ipcMain.handle('setRoformerOptions', (event, options) =>
       processQueue.setRoformerOptions(options)

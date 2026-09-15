@@ -1,3 +1,5 @@
+import { separateMultistem } from './multistem.js'
+import { getMultistemModel, validateMultistemOptions } from './multistemModels.js'
 import { separateRoformer } from './roformer.js'
 import {
   getRoformerModel,
@@ -22,6 +24,8 @@ let curProgressFtStemIdx = null
 let activeJob = null
 
 function getPathToThirdPartyApps() {
+  if (process.env.STEMROLLER_THIRD_PARTY_APPS)
+    return path.resolve(process.env.STEMROLLER_THIRD_PARTY_APPS)
   if (process.env.NODE_ENV === 'dev' || process.env.STEMROLLER_RUN_FROM_SOURCE) {
     if (process.platform === 'win32') {
       return path.resolve(path.join(import.meta.dirname, '..', 'win-extra-files', 'ThirdPartyApps'))
@@ -295,6 +299,8 @@ function getFfmpegCompressionArguments(filetype) {
 async function _processVideo(video, tmpDir) {
   const demucsModelName = getModelName()
   const roformerModel = getRoformerModel(demucsModelName)
+  const multistemModel = getMultistemModel(demucsModelName)
+  const multistemOptions = getMultistemOptions()
   const roformerOptions = getRoformerOptions()
   const backend = getPyTorchBackend()
   const demucsStemsFiletype = getOutputFormat()
@@ -335,7 +341,28 @@ async function _processVideo(video, tmpDir) {
     null
   )
   let demucsWavFilesList
-  if (roformerModel) {
+  if (multistemModel) {
+    demucsWavFilesList = await separateMultistem({
+      model: multistemModel,
+      modelDir:
+        process.env.STEMROLLER_MODELS_DIR ||
+        PATH_TO_MODELS ||
+        path.join(app.getPath('userData'), 'Models'),
+      python:
+        process.env.STEMROLLER_MULTISTEM_PYTHON ||
+        path.join(PATH_TO_THIRD_PARTY_APPS || '', 'multistem', 'python', 'python.exe'),
+      script:
+        process.env.NODE_ENV === 'dev' || process.env.STEMROLLER_RUN_FROM_SOURCE
+          ? path.resolve(import.meta.dirname, '..', 'python', 'separate.py')
+          : path.resolve(process.resourcesPath, '..', 'PythonInference', 'separate.py'),
+      mediaPath,
+      tmpDir,
+      options: multistemOptions,
+      backend,
+      run: (command, args, options) =>
+        spawnAndWait(video.videoId, tmpDir, command, args, false, options),
+    })
+  } else if (roformerModel) {
     demucsWavFilesList = await separateRoformer({
       model: roformerModel,
       modelDir:
@@ -472,7 +499,7 @@ async function _processVideo(video, tmpDir) {
   // Separate model comparisons so two-stem results never inherit old Demucs stem files.
   const outputBasePath = path.join(
     outputBasePathContainingFolder,
-    roformerModel ? `${outputFolderName} - ${demucsModelName}` : outputFolderName
+    roformerModel || multistemModel ? `${outputFolderName} - ${demucsModelName}` : outputFolderName
   )
   await fs.mkdir(outputBasePath, { recursive: true })
   console.log(`Copying all stems to "${outputBasePath}"`)
@@ -805,4 +832,12 @@ export const getRoformerOptions = () =>
 
 export const setRoformerOptions = (options) => {
   electronStore.set('roformerOptions', validateRoformerOptions(options))
+}
+
+export const getMultistemOptions = () =>
+  validateMultistemOptions(
+    electronStore?.get('multistemOptions') || { chunkSize: 176400, overlap: 2 }
+  )
+export const setMultistemOptions = (options) => {
+  electronStore.set('multistemOptions', validateMultistemOptions(options))
 }

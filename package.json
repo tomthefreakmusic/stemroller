@@ -25,7 +25,8 @@
     "start:svelte": "vite preview",
     "start:electron": "electron .",
     "setup:roformer": "node scripts/setup-roformer.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "setup:multistem": "node scripts/setup-multistem.js"
   },
   "devDependencies": {
     "@electron/packager": "^18.3.6",

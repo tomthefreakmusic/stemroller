@@ -1,10 +1,10 @@
 # StemRoller RoFormer fork
 
-Adds BS RoFormer Anvuew Q8, Mel-Band RoFormer Deux Q8, and Gabox FV6 Q8 to StemRoller's model selector, with Vulkan GPU acceleration on Windows. Demucs remains available for individual instruments.
+Adds BS RoFormer Anvuew Q8, Mel-Band RoFormer Deux Q8, and Gabox FV6 Q8 to StemRoller's model selector, with Vulkan GPU acceleration on Windows. Also adds CUDA-accelerated SCNet Large and BS PolarFormer Aname for vocals, drums, bass, and other stems. Demucs remains available.
 
-**[Setup, model choices, GPU validation, and licenses](docs/ROFORMER.md)**
+**[GGUF setup and models](docs/ROFORMER.md) · [SCNet / PolarFormer setup and GPU validation](docs/MULTISTEM.md)**
 
-After the normal dependency setup below, run `npm run setup:roformer`. Then choose a model under Preferences. Automatic setup covers Windows x64; the model weights are downloaded separately and retain their original licenses.
+After the normal dependency setup below, run `npm run setup:roformer` and `npm run setup:multistem`. Then choose a model under Preferences. Automatic setup covers Windows x64; the model weights are downloaded separately and retain their original licenses.
 
 ---
 

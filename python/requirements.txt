@@ -1,0 +1,25 @@
+# Windows CPython 3.12. Torch is installed from the CUDA 12.6 index by setup-multistem.js.
+torch==2.7.1+cu126
+numpy==2.5.0
+soundfile==0.14.0
+cffi==2.0.0
+pycparser==3.0
+PyYAML==6.0.3
+einops==0.8.2
+beartype==0.18.5
+rotary-embedding-torch==0.9.1
+PoPE-pytorch==0.2.1
+einx==0.3.0
+frozendict==2.4.6
+torch-einops-utils==0.1.5
+filelock==3.29.4
+typing_extensions==4.15.0
+sympy==1.14.0
+mpmath==1.3.0
+networkx==3.6.1
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+fsspec==2026.6.0
+setuptools==82.0.1
+packaging==26.2
+tqdm==4.68.3

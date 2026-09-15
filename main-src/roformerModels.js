@@ -1,3 +1,4 @@
+import { getMultistemModel } from './multistemModels.js'
 // Checkpoint outputs follow the original training configs, not GGUF filenames.
 // Downloads are pinned to a Hub revision and SHA-256, never a mutable main branch.
 export const MODEL_REVISION = 'df802a6773d25ba6ef785ff619daa3e510503168'
@@ -30,7 +31,9 @@ export const ROFORMER_MODELS = [
 
 export const getRoformerModel = (id) => ROFORMER_MODELS.find((model) => model.id === id)
 export const isSupportedModel = (id) =>
-  ['htdemucs', 'htdemucs_ft', 'htdemucs_6s'].includes(id) || Boolean(getRoformerModel(id))
+  ['htdemucs', 'htdemucs_ft', 'htdemucs_6s'].includes(id) ||
+  Boolean(getRoformerModel(id)) ||
+  Boolean(getMultistemModel(id))
 
 export function validateRoformerOptions(options) {
   if (![176400, 352800, 573300].includes(options.chunkSize)) {

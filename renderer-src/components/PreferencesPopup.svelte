@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte'
+  import { MULTISTEM_MODELS } from '../../main-src/multistemModels.js'
   import { ROFORMER_MODELS } from '../../main-src/roformerModels.js'
   import Button from '$components/Button.svelte'
   import CogIcon from '$icons/outline/CogIcon.svelte'
@@ -17,7 +18,12 @@
   let preserveOriginalAudio = null
   let chunkSize = 352800
   let overlap = 2
+  let multistemChunkSize = 176400
+  let multistemOverlap = 2
+  $: isMultistem = modelName?.startsWith('torch-')
   let mounted = false
+  $: if (mounted)
+    window.setMultistemOptions({ chunkSize: multistemChunkSize, overlap: multistemOverlap })
   $: isRoformer = modelName?.startsWith('gguf-')
   $: if (mounted) window.setRoformerOptions({ chunkSize, overlap })
 
@@ -39,6 +45,9 @@
     const options = await window.getRoformerOptions()
     chunkSize = options.chunkSize
     overlap = options.overlap
+    const multiOptions = await window.getMultistemOptions()
+    multistemChunkSize = multiOptions.chunkSize
+    multistemOverlap = multiOptions.overlap
     mounted = true
   })
 
@@ -86,7 +95,7 @@
 
     <div class="w-full grow-1 shrink-1"></div>
 
-    <button class="w-6 h-6 grow-0 shrink-0" on:click={onCloseClick}>
+    <button aria-label="Close Preferences" class="w-6 h-6 grow-0 shrink-0" on:click={onCloseClick}>
       <XIcon />
     </button>
   </div>
@@ -158,12 +167,17 @@
     class="border-solid border border-slate-700 bg-slate-900 text-slate-300 focus:outline-none focus:ring focus:ring-cyan-300 px-2 py-1 mb-2 rounded-md"
     bind:value={modelName}
   >
-    <optgroup label="Demucs ï¿½ individual instruments">
+    <optgroup label="Demucs: individual instruments">
       <option value="htdemucs">Demucs: 4 stems (Fast)</option>
       <option value="htdemucs_ft">Demucs: 4 stems (Finetuned)</option>
       <option value="htdemucs_6s">Demucs: 6 stems (Experimental)</option>
     </optgroup>
-    <optgroup label="RoFormer GGUF ï¿½ vocals + instrumental">
+    <optgroup label="SCNet / PolarFormer: individual instruments">
+      {#each MULTISTEM_MODELS as model}
+        <option value={model.id}>{model.label}</option>
+      {/each}
+    </optgroup>
+    <optgroup label="RoFormer GGUF: vocals + instrumental">
       {#each ROFORMER_MODELS as model}
         <option value={model.id}>{model.label}</option>
       {/each}
@@ -202,6 +216,36 @@
     <p class="mb-2 text-sm">
       If GPU memory runs out, try 4-second chunks. Source builds need npm run setup:roformer before
       first use.
+    </p>
+  {/if}
+
+  {#if isMultistem}
+    <p class="mb-2 text-sm">
+      Separates drums, bass, vocals, and other instruments. Also exports a combined instrumental.
+      Uses CUDA on supported NVIDIA GPUs.
+    </p>
+    <label for="multiChunk" class="font-bold">Audio chunk size</label>
+    <select
+      id="multiChunk"
+      bind:value={multistemChunkSize}
+      class="bg-slate-900 px-2 py-1 mb-2 rounded-md"
+    >
+      <option value={176400}>4 seconds (lower GPU memory, default)</option>
+      <option value={352800}>8 seconds</option>
+      <option value={485100}>11 seconds (checkpoint default length)</option>
+    </select>
+    <label for="multiOverlap" class="font-bold">Overlap</label>
+    <select
+      id="multiOverlap"
+      bind:value={multistemOverlap}
+      class="bg-slate-900 px-2 py-1 mb-2 rounded-md"
+    >
+      <option value={2}>2 (faster)</option>
+      <option value={4}>4 (smoother joins, slower)</option>
+    </select>
+    <p class="mb-2 text-sm">
+      If GPU memory runs out, use 4-second chunks or
+      CPU.
     </p>
   {/if}
 

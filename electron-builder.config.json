@@ -20,6 +20,15 @@
     {
       "from": "docs",
       "to": "Documentation"
+    },
+    {
+      "from": "python",
+      "to": "PythonInference",
+      "filter": [
+        "**/*",
+        "!**/__pycache__/**",
+        "!**/*.pyc"
+      ]
     }
   ],
   "mac": {
